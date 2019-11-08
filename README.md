@@ -8,7 +8,7 @@ const ws = new WebSocket("wss://trees.xetera.dev")
 ws.onmessage = (str) => {
   const data = JSON.parse(str)
   console.log(data)
-  // { "event": "tree_count", "data": "14431524" }
+  // { "event": "tree_count", "data": 14431524 }
 }
 ```
 ### Event types
@@ -22,7 +22,7 @@ Emitted when the tree count is updated.
 ```json
 {
   "event": "tree_count",
-  "data": "14431524"
+  "data": 14431524
 }
 ```
 
