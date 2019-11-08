@@ -7,4 +7,4 @@ RUN pub get
 ADD . /app
 RUN pub get --offline
 
-CMD pub run server.dart
+CMD dart --enable-experiment=non-nullable /app/bin/server.dart

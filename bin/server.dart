@@ -1,46 +1,87 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import "dart:convert";
-import "request.dart";
+import "teamtrees.dart";
 
 const checkDelay = Duration(seconds: 6);
 final connections = Set<WebSocket>();
+final latestDonations = Queue<Donation>();
+const MAX_DONATIONS = 50;
 int treeCount = -1;
 
-void sendLatest(final WebSocket socket) {
-  final now = DateTime.now().toIso8601String();
-  final payload = {"date": now, "trees": treeCount};
+void sendTrees(final WebSocket socket) {
+  final payload = {
+    "event": "tree_count",
+    "data": treeCount,
+  };
   socket.add(json.encode(payload));
 }
 
-final broadcast = () => connections.forEach(sendLatest);
+void sendDonations(final WebSocket socket, List<Donation> donations) {
+  final payload = {
+    "event": "donations",
+    "data": donations.toList(),
+  };
+  socket.add(json.encode(payload));
+}
+
+void broadcastTrees() => connections.forEach(sendTrees);
+
+void broadcastDonations(List<Donation> donations) =>
+    connections.forEach((conn) {
+      sendDonations(conn, donations);
+    });
 
 Future updateTrees() async {
   print("Updating tree count");
-  final newTrees = await treeCountAsync();
-  if (newTrees == treeCount) {
+  final res = await crawl();
+  final newDonations = updateQueue(res.donations);
+  if (res.treeCount == treeCount) {
     return;
   }
-  treeCount = newTrees;
+  treeCount = res.treeCount;
   print("new tree count $treeCount");
-  broadcast();
+  await broadcastTrees();
+  await broadcastDonations(newDonations);
 }
 
-void handleConnection(final WebSocket socket) {
-  connections.add(socket);
-  if (treeCount != -1) {
-    sendLatest(socket);
-  }
-  socket.handleError(() {
-    connections.remove(socket);
+List<Donation> updateQueue(final List<Donation> donations) {
+  final toCheck = latestDonations.toSet();
+  final newDonations = donations.takeWhile((donation) {
+    return !toCheck.any((existingDonation) {
+      return existingDonation == donation;
+    });
   });
+  latestDonations.addAll(newDonations);
+  final until = latestDonations.length > MAX_DONATIONS
+      ? MAX_DONATIONS - latestDonations.length
+      : 0;
+  for (int i = 0; i < until; ++i) {
+    latestDonations.removeFirst();
+  }
+  return newDonations.toList();
+}
+
+void handleDisconnect(final WebSocket socket) {
+  connections.remove(socket);
 }
 
 const port = 8080;
 
+void handleConnection(final WebSocket socket) async {
+  connections.add(socket);
+  if (treeCount != -1) {
+    await sendTrees(socket);
+  }
+  if (latestDonations.isNotEmpty) {
+    await sendDonations(socket, latestDonations.toList());
+  }
+}
+
 void main(final List<String> args) async {
   await runZoned(() async {
-    final server = await HttpServer.bind('127.0.0.1', port);
+    final server = await HttpServer.bind('0.0.0.0', port);
     server.defaultResponseHeaders.add("Access-Control-Allow-Origin", "*");
     print("Listening to connections at $port");
     Timer.periodic(checkDelay, (Timer timer) {
@@ -48,13 +89,17 @@ void main(final List<String> args) async {
     });
     await for (final req in server) {
       print("Received a new connection");
-      if (req.uri.path == '/ws') {
-        print(
-            "Received a new websocket connection.\nConnected clients: ${connections.length}");
-        // Upgrade a HttpRequest to a WebSocket connection.
-        final socket = await WebSocketTransformer.upgrade(req);
-        handleConnection(socket);
+      if (req.uri.path != '/ws') {
+        continue;
       }
+      // Upgrade a HttpRequest to a WebSocket connection.
+      final socket = await WebSocketTransformer.upgrade(req);
+      socket.listen((_) {}, onDone: () {
+        handleDisconnect(socket);
+      });
+      handleConnection(socket);
+      print(
+          "Received a new websocket connection.\nConnected clients: ${connections.length}");
     }
   }, onError: (e) => print("An error occurred.\n$e"));
 }

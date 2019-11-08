@@ -8,11 +8,8 @@ environment:
   sdk: '>=2.5.0 <3.0.0'
 
 dependencies:
-  args: ^1.5.0
-  aqueduct: ^3.2.1
   http: ^0.12.0
   html: ^0.14.0
-  shelf_web_socket: ^0.2.3
 
 dev_dependencies:
   pedantic: ^1.8.0
