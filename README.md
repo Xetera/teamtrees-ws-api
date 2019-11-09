@@ -5,9 +5,9 @@ Simple websocket server to publish new updates from https://teamtrees.org
 ## Usage
 ```js
 const ws = new WebSocket("wss://trees.xetera.dev")
-ws.onmessage = (str) => {
-  const data = JSON.parse(str)
-  console.log(data)
+ws.onmessage = (event) => {
+  const message = JSON.parse(event.data)
+  console.log(message)
   // { "event": "tree_count", "data": 14431524 }
 }
 ```
