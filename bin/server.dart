@@ -55,7 +55,7 @@ List<Donation> updateQueue(final List<Donation> donations) {
   });
   latestDonations.addAll(newDonations);
   final until = latestDonations.length > MAX_DONATIONS
-      ? MAX_DONATIONS - latestDonations.length
+      ? latestDonations.length - MAX_DONATIONS
       : 0;
   for (int i = 0; i < until; ++i) {
     latestDonations.removeFirst();
@@ -89,17 +89,27 @@ void main(final List<String> args) async {
     });
     await for (final req in server) {
       print("Received a new connection");
-      if (req.uri.path != '/ws') {
-        continue;
+      if (WebSocketTransformer.isUpgradeRequest(req)) {
+        if (req.uri.path != '/ws') {
+          continue;
+        }
+        // Upgrade a HttpRequest to a WebSocket connection.
+        final socket = await WebSocketTransformer.upgrade(req);
+        socket.listen((_) {}, onDone: () {
+          handleDisconnect(socket);
+        });
+        handleConnection(socket);
+        print(
+            "Received a new websocket connection.\nConnected clients: ${connections.length}");
+      } else {
+        final path = req.uri.path;
+        if (path == "/trees") {
+          req.response.write(json.encode({"trees": treeCount}));
+        } else if (path == "/donations") {
+          req.response
+              .write(json.encode({"donations": latestDonations.toList()}));
+        }
       }
-      // Upgrade a HttpRequest to a WebSocket connection.
-      final socket = await WebSocketTransformer.upgrade(req);
-      socket.listen((_) {}, onDone: () {
-        handleDisconnect(socket);
-      });
-      handleConnection(socket);
-      print(
-          "Received a new websocket connection.\nConnected clients: ${connections.length}");
     }
   }, onError: (e) => print("An error occurred.\n$e"));
 }

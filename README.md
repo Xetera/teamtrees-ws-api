@@ -13,5 +13,5 @@ ws.onmessage = (str) => {
 
 ## Currently supports
 - [x] Updates to tree count
-- [ ] New recent donations
+- [x] New recent donations
 - [ ] Changes to most trees
