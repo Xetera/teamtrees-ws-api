@@ -54,4 +54,3 @@ Max 50 latest donations are stored at a time.
 ### Currently supports
 - [x] Updates to tree count
 - [x] New recent donations
-- [ ] Changes to most trees
